@@ -1,0 +1,84 @@
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Language" content="en_US" />
+<meta name="viewport" content="initial-scale=1, minimum-scale=1, width=device-width">
+<script>
+
+function string2bin(txt) {
+  return new Uint8Array(txt.split("").map((s => s.charCodeAt(0))));
+}
+
+function bin2string(data) {
+  let result = "";
+  for(let i = 0; i < data.length; i++) result += String.fromCharCode(data[i]);
+  return result;
+}
+
+function encodeUrlSafe(data) {
+  let txt = btoa(data);
+  return txt.replace(/\//g, "_").replace(/\+/g, "-").replace(/\=/g, "");
+}
+
+function decodeUrlSafe(txt) {
+  return atob(txt.replace(/_/g, "/").replace(/-/g, "+"));
+}
+
+async function encrypt() {
+  let uuid = window.crypto.randomUUID();
+  let key = await crypto.subtle.digest("SHA-256", string2bin(uuid));
+  let data = string2bin(document.getElementById("plainText").value);
+  let ivZero = new Uint8Array(8);
+  let aesParams = { name: "AES-GCM", iv: ivZero };
+  let ik = await window.crypto.subtle.importKey("raw", key, "AES-GCM", true, ["encrypt"]);
+  let cipherRaw = new Uint8Array(await window.crypto.subtle.encrypt(aesParams, ik, data));
+  let cipherText = encodeUrlSafe(bin2string(cipherRaw));
+  let cipherLinkElement = document.getElementById("cipherLink");
+  let urlSelf = window.location.href.split("?")[0];
+  cipherLinkElement.href = urlSelf + "?ct=" + cipherText + "&key=" + uuid;
+  cipherLinkElement.innerHTML = cipherLinkElement.href;
+}
+
+async function decrypt(cipherText, uuid) {
+  let cipherRaw = string2bin(decodeUrlSafe(cipherText));
+  let key = await crypto.subtle.digest("SHA-256", string2bin(uuid));
+  let ivZero = new Uint8Array(8);
+  let aesParams = { name: "AES-GCM", iv: ivZero };
+  let ik = await window.crypto.subtle.importKey("raw", key, "AES-GCM", true, ["decrypt"]);
+  let plainRaw = null;
+  try {
+    plainRaw = new Uint8Array(await window.crypto.subtle.decrypt(aesParams, ik, cipherRaw));
+    let plainText = bin2string(plainRaw);
+    document.getElementById("plainText").value = plainText;
+  }
+  catch (e) {
+    console.warn(e);
+    alert("DECRYPTION FAILED");
+  }
+}
+
+async function init() {
+  let params = new URLSearchParams(window.location.search);
+  if (params.has("ct") && params.has("key")) {
+    decrypt(params.get("ct"), params.get("key"));
+  }
+}
+
+</script>
+<style>
+html { font-family: Courier, Monospace; font-size: 12px; }
+body { background-color: #FFFFFF; color: #000000; font-family: inherit; font-size: inherit; }
+button { width: 45%; font-family: inherit; font-size: inherit; }
+textarea { width: 45%; font-family: inherit; font-size: inherit; }
+</style>
+<title>Hackathon</title>
+</head>
+<body onload="init()">
+<h2>Hackathon</h2>
+<textarea id="plainText" placeholder="enter credentials here" rows="5"></textarea>
+<br><br>
+<button id="encrypt" onclick="encrypt()" type="button">ENCRYPT</button>
+<br><br>
+<a id="cipherLink"></a>
+</body>
+</html>
